@@ -83,35 +83,3 @@ variable "azrm_resource_location" {
   }
 
 }
-
-##############################################################
-#######    Book Review Platform Variables             #######
-##############################################################
-
-variable "db_name" {
-  description = "PostgreSQL database name"
-  type        = string
-  default     = "bookreviews"
-  nullable    = false
-}
-
-variable "db_user" {
-  description = "PostgreSQL database user"
-  type        = string
-  default     = "bookuser"
-  nullable    = false
-}
-
-variable "db_password" {
-  description = "PostgreSQL database password"
-  type        = string
-  sensitive   = true
-  nullable    = false
-}
-
-variable "jwt_secret" {
-  description = "JWT secret key for authentication"
-  type        = string
-  sensitive   = true
-  nullable    = false
-}
