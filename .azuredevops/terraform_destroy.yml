@@ -1,0 +1,123 @@
+parameters:
+  - name: "environments"
+    type: object
+
+  - name: hostedImage
+    type: string
+
+  - name: run_tfapply
+    displayName: Run Terraform apply to create/change/destroy infrastructure
+    type: boolean
+    default: true
+
+  - name: run_tfdestroy
+    displayName: Run Terraform destroy to destroy infrastructure
+    type: boolean
+    default: false
+
+stages:
+  - "${{ each environment in parameters.environments }}":
+      - stage: ${{ environment }}_destroy
+        condition: |
+          and(
+          eq('${{ parameters.run_tfdestroy }}', 'true'),
+          ne(variables['Build.Reason'], 'PullRequest'),
+          ne(variables['Build.Reason'], 'Schedule'),
+          or(
+          eq('${{ parameters.run_tfapply }}', 'false'),
+          and(
+          eq('${{ parameters.run_tfapply }}', 'true'),
+          succeededOrFailed('${{ environment }}_apply')
+          )
+          )
+          )
+        displayName: "Terraform Destroy ${{ environment }}"
+        dependsOn:
+        jobs:
+          - deployment: ${{ environment}}_destroy
+            environment: ${{ environment}}
+            timeoutInMinutes: 0
+            variables:
+              - name: environment
+                value: ${{ environment}}
+              - template: variables.yml
+                parameters:
+                  environment: ${{ environment}}
+            displayName: "Build/modify ${{ environment}} infrastructure"
+            pool:
+                vmimage: "${{ parameters.hostedImage }}"
+            strategy:
+              runOnce:
+                deploy:
+                  steps:
+                    - checkout: self
+                      condition: succeededOrFailed()
+                      displayName: "Checkout main repo"
+                      fetchDepth: 0
+                      fetchTags: true
+                      persistCredentials: true
+
+                    - task: TerraformInstaller@1
+                      condition: succeededOrFailed()
+                      displayName: "Install terraform version $(terraform_installer_version)"
+                      enabled: true
+                      inputs:
+                        terraformVersion: "$(terraform_installer_version)"
+
+                    - task: TerraformTask@5
+                      condition: succeeded()
+                      displayName: "terraform init"
+                      inputs:
+                        provider: "azurerm"
+                        command: "init"
+                        backendServiceArm: ${{ variables.azure_service_connection}}
+                        backendAzureRmResourceGroupName: "$(resource-group)"
+                        backendAzureRmStorageAccountName: "$(storage-account)"
+                        backendAzureRmContainerName: $(container-name)
+                        backendAzureRmKey: "$(state-key)"
+                        workingDirectory: $(system.DefaultWorkingDirectory)/$(terraform-directory)
+
+                    - task: TerraformTask@5
+                      condition: succeeded()
+                      displayName: "terraform validate"
+                      inputs:
+                        provider: "azurerm"
+                        command: "validate"
+                        workingDirectory: $(system.DefaultWorkingDirectory)/$(terraform-directory)
+                        environmentServiceNameAzureRM: ${{ variables.azure_service_connection}}
+
+                    - task: TerraformTask@5
+                      condition: succeeded()
+                      displayName: "terraform plan"
+                      inputs:
+                        provider: "azurerm"
+                        command: "plan"
+                        commandOptions: -destroy
+                          -out=plan_destroy_$(environment)
+                          -var-file=environment/default.tfvars
+                          -var-file=environment/$(environment)/variables.tfvars
+                          -var=azrm_subscription_id=$(subscription-id)
+                          -var=azrm_tenant_id=$(tenant-id)
+                          -var=db_password=$(db-password)
+                          -var=jwt_secret=$(jwt-secret)
+                        workingDirectory: $(system.DefaultWorkingDirectory)/$(terraform-directory)
+                        environmentServiceNameAzureRM: ${{ variables.azure_service_connection}}
+
+                    - task: PublishPipelineArtifact@1
+                      condition: succeededOrFailed()
+                      continueOnError: true
+                      displayName: "Publish terraform plan for $(environment)"
+                      enabled: true
+                      inputs:
+                        path: $(System.DefaultWorkingDirectory)/$(terraform-directory)/plan_destroy_$(environment)
+                        artifact: plan_destroy_$(environment)
+
+                    - task: TerraformTask@5
+                      condition: succeeded()
+                      displayName: Terraform Destroy
+                      inputs:
+                        provider: "azurerm"
+                        command: "apply"
+                        commandOptions: plan_destroy_$(environment)
+                        environmentServiceNameAzureRM: ${{ variables.azure_service_connection}}
+                        workingDirectory: $(System.DefaultWorkingDirectory)/$(terraform-directory)

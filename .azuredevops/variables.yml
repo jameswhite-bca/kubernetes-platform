@@ -1,0 +1,31 @@
+parameters:
+
+  - name: environment
+    type: string
+    default: ""
+
+variables:
+
+  ##############################################################
+  #######                  Azure DevOps                  #######
+  ##############################################################
+
+  # Library groups
+  - group: 'JamesTest-dev-tfvars'
+
+  - name: azure_service_connection
+    value: "JamesTest - dev"
+
+  ##############################################################
+  #######                     Terraform                  #######
+  ##############################################################
+
+  - name: state-key
+    value: ${{ replace('kubernetes-platform.tfstate', 'env', parameters.environment) }}
+
+  # Your Terraform directory
+  - name: terraform-directory
+    value: "terraform"
+
+  - name: terraform_installer_version
+    value: "latest"

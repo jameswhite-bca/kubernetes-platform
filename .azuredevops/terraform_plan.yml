@@ -1,0 +1,86 @@
+parameters:
+  - name: environment
+    type: string
+
+  - name: hostedImage
+    type: string
+
+jobs:
+  - job: ${{ parameters.environment}}_plan
+    timeoutInMinutes: 0
+    variables:
+      - name: environment
+        value: ${{ parameters.environment}}
+      - template: variables.yml
+        parameters:
+          environment: ${{parameters.environment}}
+    displayName: ${{ parameters.environment}}_plan
+    pool:
+      vmimage: "${{ parameters.hostedImage }}"
+
+    steps:
+      - checkout: self
+        condition: succeededOrFailed()
+        displayName: "Checkout main repo"
+        fetchDepth: 0
+        fetchTags: true
+        persistCredentials: true
+
+      - task: TerraformInstaller@1
+        condition: succeededOrFailed()
+        displayName: "Install terraform version $(terraform_installer_version)"
+        enabled: true
+        inputs:
+          terraformVersion: "$(terraform_installer_version)"
+
+      - task: terraformTask@5
+        condition: succeeded()
+        name: terraformPlanInit_${{ parameters.environment }}
+        displayName: "terraform init"
+        inputs:
+          provider: "azurerm"
+          command: "init"
+          backendServiceArm: ${{ variables.azure_service_connection}}
+          backendAzureRmResourceGroupName: "$(resource-group)"
+          backendAzureRmStorageAccountName: "$(storage-account)"
+          backendAzureRmContainerName: $(container-name)
+          backendAzureRmKey: "$(state-key)"
+          workingDirectory: $(system.DefaultWorkingDirectory)/$(terraform-directory)
+
+      - task: terraformTask@5
+        name: terraformplanvalidate${{ parameters.environment }}
+        condition: succeeded()
+        displayName: "terraform validate"
+        inputs:
+          provider: "azurerm"
+          command: "validate"
+          workingDirectory: $(system.DefaultWorkingDirectory)/$(terraform-directory)
+          environmentServiceNameAzureRM: ${{ variables.azure_service_connection}}
+
+      - task: terraformTask@5
+        name: terraformPlan${{ parameters.environment }}
+        condition: succeeded()
+        displayName: "terraform plan"
+        inputs:
+          provider: "azurerm"
+          command: "plan"
+          commandOptions: "
+            -out=plan_$(environment)
+            -var-file=environment/default.tfvars
+            -var-file=environment/$(environment)/variables.tfvars
+            -var=azrm_subscription_id=$(subscription-id)
+            -var=azrm_tenant_id=$(tenant-id)
+            -var=db_password=$(db-password)
+            -var=jwt_secret=$(jwt-secret)
+            "
+          workingDirectory: $(system.DefaultWorkingDirectory)/$(terraform-directory)
+          environmentServiceNameAzureRM: ${{ variables.azure_service_connection}}
+
+      - task: PublishPipelineArtifact@1
+        condition: succeededOrFailed()
+        continueOnError: true
+        displayName: "Publish Terraform plan for $(environment)"
+        enabled: true
+        inputs:
+          path: $(System.DefaultWorkingDirectory)/$(terraform-directory)/plan_$(environment)
+          artifact: plan_$(environment)

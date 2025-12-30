@@ -1,0 +1,89 @@
+parameters:
+  - name: "environments"
+    type: object
+
+  - name: hostedImage
+    type: string
+
+  - name: "shouldRun"
+    type: string
+    default: true
+
+  - name: run_tfapply
+    displayName: Run Terraform apply to create/change/destroy infrastructure
+    type: boolean
+    default: true
+
+stages:
+  - "${{ each environment in parameters.environments }}":
+      - stage: ${{ environment}}_apply
+        condition: |
+          and(
+          succeededOrFailed(),
+          eq('${{ parameters.run_tfapply }}', 'True'),
+          ne(variables['Build.Reason'], 'PullRequest'),
+          ne(variables['Build.Reason'], 'Schedule'),
+          eq(dependencies.plan.outputs['${{ environment }}_plan.terraformplan${{ environment }}.changesPresent'], 'true')
+          )
+        displayName: "Terraform Apply ${{ environment }} "
+        dependsOn: [plan]
+        jobs:
+          - deployment: ${{ environment}}_apply
+            environment: ${{ environment}}
+            timeoutInMinutes: 0
+            variables:
+              - name: environment
+                value: ${{ environment}}
+              - template: variables.yml
+                parameters:
+                  environment: ${{ environment}}
+            displayName: "Build/modify ${{ environment}} infrastructure"
+            pool:
+                vmimage: "${{ parameters.hostedImage }}"
+            strategy:
+              runOnce:
+                deploy:
+                  steps:
+                    - checkout: self
+                      condition: succeededOrFailed()
+                      displayName: "Checkout main repo"
+                      fetchDepth: 0
+                      fetchTags: true
+                      persistCredentials: true
+
+                    - task: DownloadPipelineArtifact@2
+                      condition: succeededOrFailed()
+                      displayName: "Download terraform plan for $(environment)"
+                      inputs:
+                        artifact: plan_$(environment)
+                        path: $(System.DefaultWorkingDirectory)/$(terraform-directory)
+
+                    - task: TerraformInstaller@1
+                      condition: succeededOrFailed()
+                      displayName: "Install terraform version $(terraform_installer_version)"
+                      enabled: true
+                      inputs:
+                        terraformVersion: "$(terraform_installer_version)"
+
+                    - task: TerraformTaskV4@4
+                      condition: succeededOrFailed()
+                      displayName: "terraform init"
+                      inputs:
+                        provider: "azurerm"
+                        command: "init"
+                        backendServiceArm: ${{ variables.azure_service_connection}}
+                        backendAzureRmResourceGroupName: "$(resource-group)"
+                        backendAzureRmStorageAccountName: "$(storage-account)"
+                        backendAzureRmContainerName: $(container-name)
+                        backendAzureRmKey: "$(state-key)"
+                        workingDirectory: $(system.DefaultWorkingDirectory)/$(terraform-directory)
+
+                    - task: terraformTask@5
+                      condition: succeededOrFailed()
+                      displayName: Terraform Apply
+                      inputs:
+                        provider: "azurerm"
+                        command: "apply"
+                        commandOptions: -input=false plan_$(environment)
+                        environmentServiceNameAzureRM: ${{ variables.azure_service_connection}}
+                        workingDirectory: $(System.DefaultWorkingDirectory)/$(terraform-directory)

@@ -1,0 +1,75 @@
+name:
+  infrastructure-$(Date:yy)-$(Date:MM)-$(Date:dd).$(Rev:r)
+
+trigger:
+  batch: true
+  branches:
+    include:
+      - "main"
+  paths:
+    include:
+      - "/$(terraform-directory)/*"
+
+
+parameters:
+  - name: "environments"
+    type: object
+    default: ["dev", "uat", "prod"]
+
+  - name: hostedImage
+    displayName: Microsoft-Hosted Agent Image
+    type: string
+    default: ubuntu-latest
+    values:
+      - ubuntu-latest
+      - windows-latest
+
+  - name: run_tfplan
+    displayName: Run Terraform Plan?
+    type: boolean
+    default: true
+
+  - name: run_tfapply
+    displayName: Run Terraform Apply?
+    type: boolean
+    default: true
+
+  - name: run_tfdestroy
+    displayName: Run Terraform Destroy?
+    type: boolean
+    default: false
+
+variables:
+  - ${{each environment in parameters.environments}}:
+      - template: variables.yml
+
+lockBehavior: sequential
+
+stages:
+
+  - stage: plan
+    displayName: "Terraform Plan"
+    condition: |
+      and(
+        succeededOrFailed(),
+        eq(${{ parameters.run_tfplan }}, true)
+      )
+    jobs:
+      - ${{ each environment in parameters.environments }}:
+          - template: terraform_plan.yml
+            parameters:
+              environment: ${{ environment}}
+              hostedImage: "${{ parameters.hostedImage }}"
+
+  - template: terraform_apply.yml
+    parameters:
+      environments: "${{ parameters.environments }}"
+      hostedImage: "${{ parameters.hostedImage }}"
+      run_tfapply: "${{ parameters.run_tfapply }}"
+
+  - template: terraform_destroy.yml
+    parameters:
+      environments: "${{ parameters.environments }}"
+      hostedImage: "${{ parameters.hostedImage }}"
+      run_tfapply: "${{ parameters.run_tfapply }}"
+      run_tfdestroy: "${{ parameters.run_tfdestroy }}"
