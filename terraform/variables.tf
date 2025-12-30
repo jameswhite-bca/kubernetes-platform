@@ -11,7 +11,7 @@ variable "app_name" {
   type        = string
 
   validation {
-    condition     = length(var.app_name) <= 14 && can(regex("^[a-z0-9]*$", var.app_name))
+    condition     = length(var.app_name) <= 20 && can(regex("^[a-z0-9]*$", var.app_name))
     error_message = "The app_name must be lowercase alphanumeric characters and have a maximum length of 14 characters."
   }
 
