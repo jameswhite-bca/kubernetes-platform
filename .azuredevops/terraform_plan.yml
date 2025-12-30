@@ -70,8 +70,6 @@ jobs:
             -var-file=environment/$(environment)/variables.tfvars
             -var=azrm_subscription_id=$(subscription-id)
             -var=azrm_tenant_id=$(tenant-id)
-            -var=db_password=$(db-password)
-            -var=jwt_secret=$(jwt-secret)
             "
           workingDirectory: $(system.DefaultWorkingDirectory)/$(terraform-directory)
           environmentServiceNameAzureRM: ${{ variables.azure_service_connection}}
