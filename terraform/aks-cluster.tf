@@ -38,6 +38,7 @@ module "aks_cluster" {
     min_count            = 3
     max_count            = 3
     auto_scaling_enabled = true
+    vnet_subnet_id      = module.vnet.subnets["aks_subnet"].resource_id
     upgrade_settings = {
       max_surge = "10%"
     }

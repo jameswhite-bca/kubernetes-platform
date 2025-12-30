@@ -5,6 +5,12 @@ module "vnet" {
   location         = var.azrm_resource_location
   parent_id        = module.resource_group.resource_id
   address_space    = ["10.0.0.0/16"]
-  enable_telemetry = true
   name             = module.naming.virtual_network.name
+
+  subnets = {
+    aks_subnet = {
+      name             = join("-", ["aks", var.environment, "snet"])
+      address_prefixes = ["10.0.1.0/24"]
+    }
+    }    
 }
