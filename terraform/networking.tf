@@ -3,7 +3,7 @@ module "vnet" {
   source = "git::https://github.com/Azure/terraform-azurerm-avm-res-network-virtualnetwork.git?ref=v0.16.0"
 
   location         = var.azrm_resource_location
-  parent_id        = module.resource_group.id
+  parent_id        = module.resource_group.resource_id
   address_space    = ["10.0.0.0/16"]
   enable_telemetry = true
   name             = module.naming.virtual_network.name
