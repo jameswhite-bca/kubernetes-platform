@@ -7,11 +7,6 @@ terraform {
       version = ">= 4.12.0, < 5.0.0"
     }
 
-    random = {
-      source  = "hashicorp/random"
-      version = ">= 3.6.0, < 4.0.0"
-    }
-
     kubernetes = {
       source  = "hashicorp/kubernetes"
       version = ">= 2.35.0, < 3.0.0"
@@ -33,10 +28,6 @@ provider "azurerm" {
   subscription_id = var.azrm_subscription_id
   tenant_id       = var.azrm_tenant_id
 }
-
-provider "random" {
-}
-
 provider "kubernetes" {
   host                   = module.aks_cluster.kube_admin_config[0].host
   username               = module.aks_cluster.kube_admin_config[0].username  
