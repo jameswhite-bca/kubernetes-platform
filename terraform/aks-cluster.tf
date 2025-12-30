@@ -72,6 +72,12 @@ module "aks_cluster" {
     user_assigned_identity_id = azurerm_user_assigned_identity.aks_kubelet.id
   }
 
+  network_profile = {
+    network_plugin = "azure"
+    service_cidr   = "10.1.0.0/16"
+    dns_service_ip = "10.1.0.10"
+  }
+
   depends_on = [
     azurerm_role_assignment.aks_control_plane_mio
   ]
