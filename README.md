@@ -12,6 +12,7 @@ This repository provisions a complete Kubernetes platform on Azure, including:
 - **NGINX Ingress Controller** - HTTP/HTTPS routing and load balancing
 - **Cert-Manager** - Automated TLS certificate management with Let's Encrypt
 - **Argo CD** - GitOps continuous delivery for Kubernetes
+- **External Secrets Operator** - Sync secrets from Azure Key Vault to Kubernetes
 
 ## Architecture
 
@@ -22,6 +23,7 @@ The infrastructure is designed with security and scalability in mind:
 - **RBAC**: Azure AD integration for role-based access control
 - **Auto-scaling**: Configured node pool with min/max scaling capabilities
 - **GitOps**: Argo CD for declarative application deployments
+- **Secret Management**: External Secrets Operator for centralized secret synchronization from Azure Key Vault
 
 ## Prerequisites
 
@@ -55,6 +57,7 @@ kubernetes-platform/
 │   ├── aks-cluster.tf            # AKS cluster and managed identities
 │   ├── argocd.tf                 # Argo CD Helm deployment
 │   ├── cert-manager.tf           # Cert-manager Helm deployment
+│   ├── external-secrets.tf       # External Secrets Operator
 │   ├── data.tf                   # Data sources
 │   ├── modules.tf                # Terraform module configurations
 │   ├── networking.tf             # VNet and subnets
@@ -162,6 +165,48 @@ kubectl apply -f terraform/k8s/cert-manager-issuer.yaml
 
 Update the email address in the issuer configuration before applying.
 
+### Configure External Secrets Operator
+
+To sync secrets from Azure Key Vault:
+
+1. **Create a SecretStore:**
+   ```yaml
+   apiVersion: external-secrets.io/v1beta1
+   kind: SecretStore
+   metadata:
+     name: azure-backend
+     namespace: default
+   spec:
+     provider:
+       azurekv:
+         authType: WorkloadIdentity
+         vaultUrl: "https://<your-keyvault-name>.vault.azure.net"
+         serviceAccountRef:
+           name: external-secrets-sa
+   ```
+
+2. **Create an ExternalSecret:**
+   ```yaml
+   apiVersion: external-secrets.io/v1beta1
+   kind: ExternalSecret
+   metadata:
+     name: my-secret
+     namespace: default
+   spec:
+     refreshInterval: 1h
+     secretStoreRef:
+       name: azure-backend
+       kind: SecretStore
+     target:
+       name: my-k8s-secret
+     data:
+     - secretKey: password
+       remoteRef:
+         key: my-keyvault-secret
+   ```
+
+**Note**: Configure workload identity or service principal credentials for ESO to access Azure Key Vault.
+
 ### Verify Deployments
 
 ```bash
@@ -176,6 +221,9 @@ kubectl get pods -n cert-manager
 
 # Check Argo CD
 kubectl get pods -n argocd
+
+# Check External Secrets Operator
+kubectl get pods -n external-secrets-system
 ```
 
 ## Resource Naming
